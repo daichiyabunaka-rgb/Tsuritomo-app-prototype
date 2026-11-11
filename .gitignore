@@ -1,0 +1,4 @@
+# ビルド生成物・配布アーカイブ（リリースはGitHub Releases Assetsに置く）
+release/
+*.apk
+*.zip

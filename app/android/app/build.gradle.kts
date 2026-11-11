@@ -53,11 +53,21 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            // プロトタイプ用にリポジトリ同梱のキーストアで署名する
+            // （ベータ配布のため署名情報を公開している。ストア配布の前には
+            //  専用のキーストアへsecretに格納して差し替えること）
+            storeFile = file("tsuritomo-upload.keystore")
+            storePassword = "tsuritomo2026"
+            keyAlias = "tsuritomo"
+            keyPassword = "tsuritomo2026"
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }
