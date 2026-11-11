@@ -8,8 +8,8 @@ import '../util/format.dart';
 import 'recruitment_create_sheet.dart';
 
 /// 「近くの釣り場」タブ（釣りとも！の特別機能）。
-/// 現在地の近くの釣りスポットを近い順に表示する
-/// （OpenStreetMap の釣り場・桟橋・釣り可水域データ）。
+/// 釣りスポット情報共有MAPくんの共有データから、現在地の近くの釣り場
+/// （堤防・桟橋・護岸など、釣り堀など有料施設を除く）を近い順に表示する。
 /// 各釣り場はGoogleマップで開けるほか、その釣り場で直接募集をかけられる。
 class SpotPage extends StatefulWidget {
   const SpotPage({super.key});
@@ -60,7 +60,8 @@ class _SpotPageState extends State<SpotPage> {
                 children: [
                   const SizedBox(height: 4),
                   Text(
-                    '現在地の近くの釣り場を近い順に表示します。',
+                    '現在地の近くの釣り場（釣りスポット情報共有MAPくんの共有データ）を'
+                    '近い順に表示します。釣り堀・海釣り公園など有料施設は除外しています。',
                     style: theme.textTheme.bodySmall,
                   ),
                   if (snapshot.connectionState != ConnectionState.done &&
@@ -73,7 +74,7 @@ class _SpotPageState extends State<SpotPage> {
                           const SizedBox(height: 12),
                           Text(
                             '周辺の釣り場を検索しています…\n'
-                            '初回は30秒〜1分ほどかかることがあります',
+                            'MAPくんから地点を取得するため少し時間がかかります',
                             textAlign: TextAlign.center,
                             style: theme.textTheme.bodySmall,
                           ),
@@ -153,7 +154,7 @@ class _SpotPageState extends State<SpotPage> {
             Row(
               children: [
                 Icon(
-                  s.isPier ? Icons.directions_boat : Icons.phishing,
+                  s.isPierLike ? Icons.directions_boat : Icons.phishing,
                   color: theme.colorScheme.primary,
                   size: 28,
                 ),
@@ -169,7 +170,7 @@ class _SpotPageState extends State<SpotPage> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${s.typeLabel} / ${distanceLabel(s.distanceKm)}',
+                        '${s.spotType} / ${distanceLabel(s.distanceKm)}',
                         style: theme.textTheme.bodySmall!.copyWith(
                           color: theme.colorScheme.primary,
                           fontWeight: FontWeight.bold,
@@ -178,31 +179,70 @@ class _SpotPageState extends State<SpotPage> {
                     ],
                   ),
                 ),
+                if (s.reputationAvg > 0)
+                  Row(
+                    children: [
+                      Icon(Icons.star,
+                          size: 14, color: Colors.amber.shade700),
+                      const SizedBox(width: 2),
+                      Text(
+                        s.reputationAvg.toStringAsFixed(1),
+                        style:
+                            TextStyle(fontSize: 13, color: Colors.amber.shade800),
+                      ),
+                    ],
+                  ),
               ],
             ),
-            if (s.openingHours != null) ...[
-              const SizedBox(height: 6),
-              Text('時間: ${s.openingHours!}',
-                  style: theme.textTheme.bodySmall),
-            ],
             const SizedBox(height: 8),
             Wrap(
               spacing: 6,
               runSpacing: 4,
               children: [
-                if (s.fishingRule == 'yes') _chip(theme, '釣り可'),
-                if (s.fishingRule == 'permit') _chip(theme, '要遊漁券'),
+                if (s.isSea) _chip(theme, '海', color: Colors.teal.shade700),
+                if (s.isFresh)
+                  _chip(theme, '川・湖', color: Colors.lightBlue.shade700),
                 if (s.feeFreeKnown) _chip(theme, '無料'),
-                if (s.fishingRule == 'unknown')
+                if (s.is24Hours) _chip(theme, '24時間'),
+                if (s.businessHours != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
                     child: Text(
-                      '釣り可否は現地の看板・遊漁規則をご確認ください',
+                      '時間: ${s.businessHours!}',
                       style: theme.textTheme.labelSmall!
                           .copyWith(color: Colors.grey.shade600),
                     ),
                   ),
               ],
+            ),
+            if (s.fishes != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                '釣れる魚: ${s.fishes!}',
+                style: theme.textTheme.bodySmall,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+            if (s.memo != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                s.memo!,
+                style: theme.textTheme.bodySmall!
+                    .copyWith(color: Colors.grey.shade700),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+            const SizedBox(height: 4),
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                '※MAPくんの投稿情報です。釣り可否・遊漁券は現地の看板や'
+                '自治体の漁業調整規則をご確認ください',
+                style: theme.textTheme.labelSmall!
+                    .copyWith(color: Colors.grey.shade500),
+              ),
             ),
             const SizedBox(height: 10),
             Row(
@@ -233,14 +273,20 @@ class _SpotPageState extends State<SpotPage> {
     );
   }
 
-  Widget _chip(ThemeData theme, String label) {
+  Widget _chip(ThemeData theme, String label, {Color? color}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.4),
+        color: (color ?? theme.colorScheme.primary)
+            .withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: (color ?? theme.colorScheme.primary).withValues(alpha: 0.4)),
       ),
-      child: Text(label, style: theme.textTheme.labelSmall),
+      child: Text(
+        label,
+        style: theme.textTheme.labelSmall!
+            .copyWith(color: color ?? theme.colorScheme.primary),
+      ),
     );
   }
 

@@ -2,7 +2,7 @@
     <!-- 位置情報（近くの人を探す機能に使用。粗い距離バンド表示のみでUIには出さない） -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <!-- 近くの釣り場検索（Overpass API）のための通信 -->
+    <!-- 近くの釣り場検索（釣りスポット情報共有MAPくん）のための通信 -->
     <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:label="釣りとも！"

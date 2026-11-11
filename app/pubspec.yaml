@@ -46,6 +46,7 @@ dependencies:
   supabase_flutter: ^2.18.3
   google_maps_flutter: ^2.19.0
   http: ^1.6.0
+  encrypt: ^5.0.3
 
 dev_dependencies:
   flutter_test:

@@ -1,5 +1,12 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:crypto/crypto.dart' as crypto;
+import 'package:encrypt/encrypt.dart' as enc;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:tsuritomo/main.dart';
@@ -89,95 +96,149 @@ void main() {
     });
   });
 
-  group('近くの釣り場（釣りとも！特別機能）', () {
-    // 東京駅（35.6812, 139.7671）を現在地としたOverpassレスポンスの例
-    const overpassJson = '''
-{
-  "version": 0.6, "generator": "Overpass API",
-  "elements": [
-    {"type": "node", "id": 101, "lat": 35.70, "lon": 139.78,
-     "tags": {"leisure": "fishing", "name": "A海釣り公園", "fee": "no"}},
-    {"type": "node", "id": 102, "lat": 35.68, "lon": 139.76,
-     "tags": {"leisure": "fishing", "name": "B有料釣り施設", "fee": "yes"}},
-    {"type": "way", "id": 103,
-     "center": {"lat": 35.67, "lon": 139.76},
-     "tags": {"natural": "water", "fishing": "permit", "name": "C湖"}},
-    {"type": "way", "id": 104,
-     "center": {"lat": 35.60, "lon": 139.76},
-     "tags": {"leisure": "fishing", "name": "D遠い釣り場"}},
-    {"type": "node", "id": 105, "lat": 35.68, "lon": 139.772,
-     "tags": {"fishing": "yes"}},
-    {"type": "node", "id": 106, "lat": 35.68, "lon": 139.77,
-     "tags": {"man_made": "pier", "fishing": "no", "name": "F釣りNG桟橋"}},
-    {"type": "node", "id": 107, "lat": 35.67, "lon": 139.765,
-     "tags": {"man_made": "pier", "name": "G桟橋"}}
-  ]
-}''';
+  group('近くの釣り場（釣りとも！特別機能・MAPくんAPI）', () {
+    // テスト用にMAPくんと同じ方式で地点リストを暗号化する
+    enc.IV newIv() => enc.IV.fromSecureRandom(16);
+    String encodePayload(String plain, enc.IV iv) {
+      final digest = crypto.sha256.convert(utf8.encode(mapkunYourId));
+      final key = enc.Key(Uint8List.fromList(digest.bytes));
+      final encrypter = enc.Encrypter(
+          enc.AES(key, mode: enc.AESMode.cbc, padding: 'PKCS7'));
+      return encrypter.encrypt(plain, iv: iv).base64;
+    }
 
-    test('実在データのパース: 釣り禁止（fishing=no）の場所は除外される', () {
-      final spots = parseOverpassResponse(overpassJson, 35.6812, 139.7671);
-      final names = spots.map((s) => s.name).toList();
-      expect(names, isNot(contains('F釣りNG桟橋'))); // fishing=no は除外
-      expect(names, contains('A海釣り公園'));
-      expect(names, contains('B有料釣り施設'));
-      expect(names, contains('C湖'));
-      expect(names, contains('名称未登録の釣り場')); // fishing=yes の名称未登録地点も載せる
+    String successBody(String plain, enc.IV iv) => jsonEncode({
+          'status': 'success',
+          'ufydirelw': encodePayload(plain, iv),
+          'ufydirelx': iv.base16.toLowerCase(),
+        });
+
+    const pageHtml =
+        '...api_key","aaaaaaaaaaaaaaaa")...api_key","bbbbbbbbbbbbbbbb")...'
+        'document.cookie="my_connection_id"+"="+"4c7acf6262fb455e38f11f10e56ce438a7b54ca6196876691ab602e8f8107d11"...';
+
+    // MAPくんの地点行（東京駅 35.6812, 139.7671 周辺のサンプル）
+    const spotRows = """
+[
+ {"coordinate_id":"1","name":"青海堤防","lat":"35.685","lng":"139.770",
+  "sea_fishing":"1","river_fishing":"0","pier":"0","breakwater":"1","revetment":"0",
+  "deck":"0","pond":"0","indoor_fishing":"0","sea_preserve":"0","concrete_preserve":"0",
+  "shop":"0","no_fee":"1","is_24_hours":"1","reputation_avg":"4.5",
+  "fishes":"アジ、シーバス","memo":"夜はライトがあり安心","bh1_start":"00:00:00","bh1_end":"24:00:00"},
+ {"coordinate_id":"2","name":"有料釣り堀","lat":"35.672","lng":"139.760",
+  "sea_fishing":"0","river_fishing":"1","pond":"1","indoor_fishing":"0",
+  "sea_preserve":"0","concrete_preserve":"0","shop":"0","no_fee":"0",
+  "is_24_hours":"0","reputation_avg":"0","fishes":"","memo":"","bh1_start":"09:00:00","bh1_end":"17:00:00"},
+ {"coordinate_id":"3","name":"","lat":"35.680","lng":"139.765",
+  "sea_fishing":"1","river_fishing":"0","pier":"1","breakwater":"0",
+  "no_fee":"0","is_24_hours":"0","reputation_avg":"0","fishes":"","memo":"小さい桟橋",
+  "bh1_start":"06:00:00","bh1_end":"18:00:00"},
+ {"coordinate_id":"4","name":"釣具店まるや","lat":"35.679","lng":"139.769",
+  "shop":"1","no_fee":"0","is_24_hours":"0","reputation_avg":"0"},
+ {"coordinate_id":"5","name":"海釣り公園","lat":"35.679","lng":"139.766",
+  "sea_preserve":"1","no_fee":"0","is_24_hours":"0","reputation_avg":"0"},
+ {"coordinate_id":"6","name":"遠い堤防","lat":"35.750","lng":"139.850",
+  "sea_fishing":"1","breakwater":"1","no_fee":"1","is_24_hours":"0","reputation_avg":"0"}
+]""";
+
+    test('ページからapi_key（2つめ）とconnection_idを取り出せる', () {
+      final parsed = parseMapkunPage(pageHtml);
+      expect(parsed.apiKey, 'bbbbbbbbbbbbbbbb'); // get_objects 用は2つめ
+      expect(parsed.connectionId,
+          '4c7acf6262fb455e38f11f10e56ce438a7b54ca6196876691ab602e8f8107d11');
     });
 
-    test('結果は現在地からの距離の昇順に並ぶ', () {
-      final spots = parseOverpassResponse(overpassJson, 35.6812, 139.7671);
-      expect(spots.length, greaterThanOrEqualTo(2));
+    test('暗号化レスポンスを復号して有料施設・釣具店を除外できる', () {
+      final iv = newIv();
+      final body = successBody(spotRows, iv);
+      final spots = decodeMapkunResponse(body, 35.6812, 139.7671);
+      final names = spots.map((s) => s.name).toList();
+      expect(names, isNot(contains('有料釣り堀'))); // pond=1 は除外
+      expect(names, isNot(contains('海釣り公園'))); // sea_preserve=1 は除外
+      expect(names, isNot(contains('釣具店まるや'))); // shop=1 は除外
+      expect(names, isNot(contains('遠い堤防'))); // 圏外（半径5km超）
+      expect(names, contains('青海堤防'));
+      expect(names, contains('名称未登録の釣り場')); // 無名も表示
+      // 距離の昇順
       for (var i = 1; i < spots.length; i++) {
         expect(spots[i - 1].distanceKm,
             lessThanOrEqualTo(spots[i].distanceKm));
       }
+      // 属性が読み取れている
+      final shore = spots.firstWhere((s) => s.name == '青海堤防');
+      expect(shore.spotType, '堤防');
+      expect(shore.isSea, isTrue);
+      expect(shore.feeFreeKnown, isTrue);
+      expect(shore.is24Hours, isTrue);
+      expect(shore.reputationAvg, 4.5);
+      expect(shore.fishes, 'アジ、シーバス');
+      final pier = spots.firstWhere((s) => s.name == '名称未登録の釣り場');
+      expect(pier.spotType, '桟橋');
+      expect(pier.businessHours, '06〜18'); // 24時間でない場合は時間帯表示
+      expect(pier.memo, '小さい桟橋');
     });
 
-    test('タグから属性が読み取れる（釣り可・桟橋）', () {
-      final spots = parseOverpassResponse(overpassJson, 35.6812, 139.7671);
-      final permit = spots.firstWhere((s) => s.name == 'C湖');
-      expect(permit.fishingRule, 'permit');
-      expect(permit.type, 'water');
-      final pier = spots.firstWhere((s) => s.name == 'G桟橋');
-      expect(pier.type, 'pier');
-      expect(pier.isPier, isTrue);
-      final known = spots.firstWhere((s) => s.name == 'A海釣り公園');
-      expect(known.fishingRule, 'unknown');
-      expect(known.feeFreeKnown, isTrue);
+    test('too_many_geo_objects は例外（分割リトライ側で処理する）', () {
+      final body = jsonEncode(
+          {'status': 'error', 'error_code': 'too_many_geo_objects'});
+      expect(() => decodeMapkunResponse(body, 35.68, 139.76),
+          throwsA(isA<SpotFetchException>()));
+    });
+
+    test('fetchFishingSpotsNear: ページ→APIの流れをつなげて取得できる', () async {
+      SharedPreferences.setMockInitialValues({});
+      invalidateMapkunSession();
+      final iv = newIv();
+      final success = successBody(spotRows, iv);
+      final client = MockClient((request) async {
+        if (request.method == 'GET') {
+          expect(request.url.toString(), mapkunPage);
+          return http.Response(pageHtml, 200);
+        }
+        // POST: api_key / cmd / 矩形パラメータが入っている
+        expect(request.body, contains('api_key=bbbbbbbbbbbbbbbb'));
+        expect(request.body, contains('cmd=get_objects'));
+        expect(request.url.toString(), mapkunApi);
+        expect(request.headers['Cookie'], contains('my_connection_id='));
+        return http.Response(success, 200);
+      });
+      final spots = await fetchFishingSpotsNear(35.6812, 139.7671,
+          client: client, forceRefresh: true);
+      expect(spots.map((s) => s.name), contains('青海堤防'));
+      for (var i = 1; i < spots.length; i++) {
+        expect(spots[i - 1].distanceKm, lessThanOrEqualTo(spots[i].distanceKm));
+      }
     });
 
     test('Googleマップ用URLは釣り場の座標で組み立てられる', () {
-      final spots = parseOverpassResponse(overpassJson, 35.6812, 139.7671);
+      final iv = newIv();
+      final spots =
+          decodeMapkunResponse(successBody(spotRows, iv), 35.6812, 139.7671);
       final spot = spots.first;
       final url = googleMapsUrlForSpot(spot);
       expect(url, startsWith('https://www.google.com/maps/search/'));
       expect(url, contains('${spot.lat},${spot.lng}'));
     });
 
-    test('Overpassクエリは釣りスポットのみを含む', () {
-      final q = buildOverpassQuery(35.6812, 139.7671, radiusKm: 5);
-      // relation を含む bbox クエリは重すぎて各サーバーが502/504を返すため除外
-      expect(q, isNot(contains('relation')));
-      expect(q, contains('"leisure"="fishing"'));
-      expect(q, contains('"fishing"~"^(yes|permit)\$"'));
-      expect(q, contains('"man_made"="pier"'));
-    });
-
     test('釣り場データのキャッシュ変換（Map⇔FishingSpot）は往復できる', () {
-      final spots = parseOverpassResponse(overpassJson, 35.6812, 139.7671);
+      final iv = newIv();
+      final spots =
+          decodeMapkunResponse(successBody(spotRows, iv), 35.6812, 139.7671);
       for (final s in spots) {
         final restored = fishingSpotFromMap(fishingSpotToMap(s));
-        expect(restored.osmId, s.osmId);
+        expect(restored.id, s.id);
         expect(restored.name, s.name);
-        expect(restored.type, s.type);
+        expect(restored.spotType, s.spotType);
         expect(restored.lat, s.lat);
         expect(restored.lng, s.lng);
-        expect(restored.fishingRule, s.fishingRule);
-        expect(restored.openingHours, s.openingHours);
+        expect(restored.isSea, s.isSea);
+        expect(restored.is24Hours, s.is24Hours);
+        expect(restored.businessHours, s.businessHours);
+        expect(restored.fishes, s.fishes);
+        expect(restored.memo, s.memo);
       }
     });
   });
-
   group('端末内スナップショット（モック永続化）', () {
     test('募集・釣果・コミュニティは保存用Mapとの往復ができる', () {
       final now = DateTime(2026, 3, 1, 12, 0);

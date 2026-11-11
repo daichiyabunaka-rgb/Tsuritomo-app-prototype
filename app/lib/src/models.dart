@@ -85,45 +85,45 @@ const List<MockLocation> mockLocations = [
   MockLocation('shinagawa', '品川', 35.6285, 139.7394),
 ];
 
-/// 近くの釣りスポット（「近くの釣り場を探す」機能）。
-/// 実データは OpenStreetMap（Overpass API）から現在地周辺で取得する。
-/// 釣りが明確に禁止（fishing=no / private）の場所は一覧から除外する。
+/// 近くの釣り場（「釣りスポット情報共有MAPくん」の共有データ）。
+/// 実データは share-map.net のWeb版が使うデータ取得経路
+/// （lib/src/util/fishing_spots.dart）から現在地周辺で取得する。
+/// 釣り堀・海釣り公園など有料・管理系施設と釣具店ピンは除外する。
 class FishingSpot {
-  final String osmId; // 例: 'way/12345'
+  final String id; // MAPくんの coordinate_id
   final String name;
-  final String type; // 'spot'（釣り場） | 'pier'（桟橋・堤防） | 'water'（釣り可の水域）
+  final String spotType; // '堤防' | '桟橋' | '護岸' | 'デッキ' | ... ラベル
   final double lat;
   final double lng;
   final double distanceKm; // 現在地からの距離
-  final String fishingRule; // 'yes' | 'permit' | 'unknown'
-  final bool
-      feeFreeKnown; // fee タグで無料と明記されているか（釣り堀・施設表示用）
-  final String? openingHours;
+  final bool isSea; // 海釣りスポット
+  final bool isFresh; // 川・湖のスポット
+  final bool feeFreeKnown; // 無料と投稿されている（no_fee=1）
+  final bool is24Hours; // 24時間釣り可能と投稿されている
+  final String? businessHours; // 営業時間のテキスト（24時間でない場合）
+  final double reputationAvg; // 投稿者評価の平均（投票が無い場合は 0）
+  final String? fishes; // 釣れる魚などの投稿テキスト
+  final String? memo; // 場所についての投稿メモ
 
   const FishingSpot({
-    required this.osmId,
+    required this.id,
     required this.name,
-    required this.type,
+    required this.spotType,
     required this.lat,
     required this.lng,
     required this.distanceKm,
-    this.fishingRule = 'unknown',
+    this.isSea = false,
+    this.isFresh = false,
     this.feeFreeKnown = false,
-    this.openingHours,
+    this.is24Hours = false,
+    this.businessHours,
+    this.reputationAvg = 0,
+    this.fishes,
+    this.memo,
   });
 
-  bool get isPier => type == 'pier';
-
-  String get typeLabel {
-    switch (type) {
-      case 'pier':
-        return '桟橋・堤防';
-      case 'water':
-        return '釣り可の水域';
-      default:
-        return '釣り場';
-    }
-  }
+  /// 桟橋・デッキ系のアイコン表示用
+  bool get isPierLike => spotType == '桟橋' || spotType == 'デッキ';
 }
 
 class AppUser {
