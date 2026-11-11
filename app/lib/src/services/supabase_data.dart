@@ -2,11 +2,17 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models.dart';
 import '../util/geohash.dart';
+import 'app_config.dart';
 
 /// Supabase モードでのデータアクセス層。
 /// AppState はモック（インメモリ）とこのクラスを AppConfig.useSupabase で切り替える。
 /// 位置は geohash のみを扱い、生の緯度経度は DB に保存しない
 /// （仕様書 6 章 位置情報プライバシー）。
+///
+/// 犬とも！と同じSupabaseプロジェクト（アカウント共有）を使うため、
+/// 募集・コミュニティ・イベント・チャット部屋・カテゴリはこのアプリの
+/// app_id で絞り込み、プロフィールは「ユーザー × アプリ」の行を扱う
+/// （docs/supabase_multiapp_migration.sql 参照）。
 class SupabaseData {
   SupabaseClient get _c => Supabase.instance.client;
 
@@ -54,19 +60,22 @@ class SupabaseData {
 
   // ---------------------------------------------------------- profiles
 
+  /// セッション中ユーザーの位置（このアプリのプロフィール行）を更新
   Future<void> updateMyLocation(double lat, double lng) async {
     await _c.from('profiles').update({
       'location_geohash': geohashEncode(lat, lng, precision: 6),
       'online': true,
-    }).eq('id', _myId);
+    }).eq('id', _myId).eq('app_id', AppConfig.appId);
   }
 
-  /// 近くの一般ユーザー / 店舗（geohash プレフィックス、近百人）
+  /// 近くの一般ユーザー / 店舗（geohash プレフィックス、近百人）。
+  /// 共有プロジェクト内でこのアプリのプロフィール行だけを対象にする。
   Future<List<AppUser>> fetchNearbyUsers(AppUser me) async {
     final rows = await _c
         .from('profiles')
         .select()
         .neq('id', _myId)
+        .eq('app_id', AppConfig.appId)
         .not('location_geohash', 'is', null)
         .limit(100);
     final users = <AppUser>[];
@@ -138,6 +147,7 @@ class SupabaseData {
     final now = DateTime.now().toUtc();
     final rows = await _c.from('recruitments').insert({
       'host_id': _myId,
+      'app_id': AppConfig.appId,
       'genre_id': genreId,
       'title': title,
       'body': body,
@@ -168,6 +178,7 @@ class SupabaseData {
         .from('recruitments')
         .select()
         .eq('status', 'active')
+        .eq('app_id', AppConfig.appId)
         .order('created_at', ascending: false)
         .limit(50);
     final recs = <Recruitment>[];
@@ -193,8 +204,11 @@ class SupabaseData {
       ));
     }
     if (hostIds.isEmpty) return (recs, <AppUser>[]);
-    final profileRows =
-        await _c.from('profiles').select().inFilter('id', hostIds.toList());
+    final profileRows = await _c
+        .from('profiles')
+        .select()
+        .inFilter('id', hostIds.toList())
+        .eq('app_id', AppConfig.appId);
     final hosts = (profileRows as List)
         .map((r) => _rowToUser(r as Map<String, dynamic>))
         .toList();
@@ -240,8 +254,11 @@ class SupabaseData {
       applicants.add(row['applicant_id'] as String);
     }
     if (applicants.isEmpty) return (apps, const <AppUser>[]);
-    final profileRows =
-        await _c.from('profiles').select().inFilter('id', applicants.toList());
+    final profileRows = await _c
+        .from('profiles')
+        .select()
+        .inFilter('id', applicants.toList())
+        .eq('app_id', AppConfig.appId);
     final users = (profileRows as List)
         .map((r) => _rowToUser(r as Map<String, dynamic>))
         .toList();
@@ -304,6 +321,7 @@ class SupabaseData {
     final created = await _c.from('chat_rooms').insert({
       'recruitment_id': recruitmentId,
       'type': 'group',
+      'app_id': AppConfig.appId,
     }).select();
     final row = (created as List).first as Map<String, dynamic>;
     final roomId = row['id'] as String;
@@ -338,6 +356,7 @@ class SupabaseData {
   Future<String> getOrCreateDm(String otherUserId) async {
     final res = await _c.rpc('get_or_create_dm', params: {
       'p_other_user': otherUserId,
+      'p_app': AppConfig.appId,
     });
     return res as String;
   }
@@ -379,12 +398,15 @@ class SupabaseData {
         .eq('user_id', _myId);
   }
 
-  /// 自分が参加している部屋（メンバー一覧も取得）
+  /// 自分が参加している部屋（メンバー一覧も取得）。
+  /// 共有プロジェクトではこのアプリの部屋だけを対象にする。
   Future<List<ChatRoom>> fetchMyRooms() async {
     final rows = await _c
         .from('chat_room_members')
-        .select('room_id, chat_rooms!inner(id, recruitment_id, type, created_at)')
+        .select(
+            'room_id, chat_rooms!inner(id, recruitment_id, type, app_id, created_at)')
         .eq('user_id', _myId)
+        .eq('chat_rooms.app_id', AppConfig.appId)
         .order('joined_at', ascending: false)
         .limit(20);
     final rooms = <ChatRoom>[];
@@ -432,11 +454,12 @@ final SupabaseData supabaseData = SupabaseData();
 extension CommunityData on SupabaseData {
   // ------------------------------------------------------------ community
 
-  /// ユーザー追加のカテゴリ一覧（全ユーザーに共有される）
+  /// ユーザー追加のカテゴリ一覧（全ユーザーに共有される。アプリ単位）
   Future<List<InterestCategory>> fetchCategories() async {
     final rows = await _c
         .from('categories')
         .select()
+        .eq('app_id', AppConfig.appId)
         .order('created_at', ascending: false)
         .limit(200);
     return (rows as List).map((r) {
@@ -456,6 +479,7 @@ extension CommunityData on SupabaseData {
   }) async {
     await _c.from('categories').insert({
       'id': id,
+      'app_id': AppConfig.appId,
       'label': label,
       'icon': icon,
       'created_by': _myId,
@@ -464,17 +488,23 @@ extension CommunityData on SupabaseData {
 
   /// 1人のプロフィールを取得（コミュニティオーナー等の補完に使う）
   Future<AppUser?> fetchProfileById(String id) async {
-    final rows = await _c.from('profiles').select().eq('id', id).limit(1);
+    final rows = await _c
+        .from('profiles')
+        .select()
+        .eq('id', id)
+        .eq('app_id', AppConfig.appId)
+        .limit(1);
     final list = rows as List;
     if (list.isEmpty) return null;
     return _rowToUser(Map<String, dynamic>.from(list.first as Map));
   }
 
-  /// コミュニティ一覧（参加メンバーの id も一緒に取得）
+  /// コミュニティ一覧（参加メンバーの id も一緒に取得）。このアプリのものだけ。
   Future<List<Community>> fetchCommunities() async {
     final rows = await _c
         .from('communities')
         .select()
+        .eq('app_id', AppConfig.appId)
         .order('created_at', ascending: false)
         .limit(50);
     final list = <Community>[];
@@ -515,6 +545,7 @@ extension CommunityData on SupabaseData {
   }) async {
     final rows = await _c.from('communities').insert({
       'owner_id': _myId,
+      'app_id': AppConfig.appId,
       'name': name,
       'description': description,
       'linked_store': linkedStore,
@@ -554,6 +585,7 @@ extension CommunityData on SupabaseData {
     final created = await _c.from('chat_rooms').insert({
       'community_id': communityId,
       'type': 'community',
+      'app_id': AppConfig.appId,
     }).select();
     final roomId =
         Map<String, dynamic>.from((created as List).first as Map)['id']
@@ -590,6 +622,7 @@ extension CommunityData on SupabaseData {
         .from('events')
         .select()
         .eq('community_id', communityId)
+        .eq('app_id', AppConfig.appId)
         .order('created_at')
         .limit(50);
     final list = <CommunityEvent>[];
@@ -636,6 +669,7 @@ extension CommunityData on SupabaseData {
   }) async {
     final rows = await _c.from('events').insert({
       'community_id': communityId,
+      'app_id': AppConfig.appId,
       'host_id': _myId,
       'title': title,
       'body': body,

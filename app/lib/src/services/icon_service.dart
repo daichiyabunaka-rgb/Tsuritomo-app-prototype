@@ -7,8 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_config.dart';
 
-/// 画像の取得と保存（アイコン・釣果速報の投稿写真など）。
-/// - すべての画像は指定サイズに自動リサイズされ、JPEG品質を下げて
+/// 画像の取得と保存（アイコン・釣果速報の投稿写真など）。/// - すべての画像は指定サイズに自動リサイズされ、JPEG品質を下げて
 ///   ファイル容量を抑える（ベータ: アイコン 400px/品質70、投稿写真 800px/品質70）
 /// - モックモード: リサイズ済み画像をアプリ専用領域に保存
 /// - Supabase モード: Storage の公開バケットへアップロードし公開URLを返す
@@ -85,7 +84,9 @@ class IconService {
         final uid = client.auth.currentUser?.id;
         if (uid != null) {
           final bytes = File(dest).readAsBytesSync();
-          final remotePath = '$uid/${prefix}_$ts.jpg';
+          // 共有プロジェクトでは $uid/<appId>/ 配下に置く
+          // （Storageポリシーは (foldername)[1] = uid を検証するため通用する）
+          final remotePath = '$uid/${AppConfig.appId}/${prefix}_$ts.jpg';
           await client.storage.from(bucket).uploadBinary(
                 remotePath,
                 bytes,

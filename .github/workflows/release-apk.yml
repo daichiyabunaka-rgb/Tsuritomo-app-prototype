@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag (e.g. v1.0.0)"
+        description: "Release tag (e.g. v1.1.0)"
         required: true
-        default: v1.0.0
+        default: v1.1.0
 
 permissions:
   contents: write
@@ -39,7 +39,15 @@ jobs:
 
       - name: Build release APK
         working-directory: app
-        run: flutter build apk --release
+        run: |
+          ARGS=""
+          if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_PUBLISHABLE_KEY" ]; then
+            ARGS="--dart-define=SUPABASE_URL=$SUPABASE_URL --dart-define=SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
+          fi
+          flutter build apk --release $ARGS
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
 
       - name: Zip APK
         run: |
@@ -54,10 +62,9 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           ZIP="$GITHUB_WORKSPACE/tsuritomo-$TAG-android-apk.zip"
-          # リリース（ドラフト含む）が無ければ作る
           if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY"; then
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
-              --title "$TAG（釣りとも！）" --notes "Android APK"
+              --title "釣りとも！ $TAG" --notes "Android APK"
           fi
           gh release upload "$TAG" "$ZIP" --clobber --repo "$GITHUB_REPOSITORY"
           gh release edit "$TAG" --draft=false --repo "$GITHUB_REPOSITORY"
