@@ -7,7 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_config.dart';
 
-/// 画像の取得と保存（アイコン画像の投稿など）。
+/// 画像の取得と保存（アイコン・釣果速報の投稿写真など）。
 /// - すべての画像は指定サイズに自動リサイズされ、JPEG品質を下げて
 ///   ファイル容量を抑える（ベータ: アイコン 400px/品質70、投稿写真 800px/品質70）
 /// - モックモード: リサイズ済み画像をアプリ専用領域に保存
@@ -23,6 +23,19 @@ class IconService {
       bucket: 'icons',
       maxWidth: 400,
       maxHeight: 400,
+      imageQuality: 70,
+    );
+  }
+
+  /// 釣果速報の投稿写真（800px・品質70。十分伝わり、容量は1/10以下）
+  Future<String?> pickCatchReportPhoto(ImageSource source) {
+    return _pickAndSave(
+      source,
+      subDir: 'catch_photos',
+      prefix: 'catch_photo',
+      bucket: 'catch-photos',
+      maxWidth: 800,
+      maxHeight: 800,
       imageQuality: 70,
     );
   }

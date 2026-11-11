@@ -272,8 +272,8 @@ class AppState extends ChangeNotifier {
   }
 
   /// リリース（ベータ配布）ビルドではモックデータを出さない。
-  /// モックの一般ユーザー・店舗・シード募集・シードコミュニティは
-  /// 開発・テスト（デバッグ）ビルドのみ。
+  /// モックの一般ユーザー・店舗・シード募集・シードコミュニティ・
+  /// シードの釣果速報は開発・テスト（デバッグ）ビルドのみ。
   bool get _useMockData => !kReleaseMode;
 
   void _rebuildMockUsers() {
@@ -296,6 +296,7 @@ class AppState extends ChangeNotifier {
     anchorLat = lat;
     anchorLng = lng;
     _rebuildMockUsers();
+    _replaceMockCatchReportSeeds();
     if (me != null) {
       // ビジネスユーザーは店舗の位置（プロフィール位置）を GPS で
       // 更新しない（登録時に設定した位置に固定）
@@ -337,7 +338,7 @@ class AppState extends ChangeNotifier {
   }
 
   /// モックモードのドメイン初期化（端末内スナップショットの復元つき）。
-  /// 自分のデータ（募集・コミュニティ・部屋）を復元し、
+  /// 自分のデータ（募集・釣果・コミュニティ・部屋）を復元し、
   /// 開発ビルドではシードが無い場合だけモックデータを補う。
   Future<void> _initMockDomain() async {
     _persistBusy = true;
@@ -355,6 +356,7 @@ class AppState extends ChangeNotifier {
           .toList()));
     }
     _seedMockCommunities();
+    _seedMockCatchReports();
   }
 
   /// ログアウト
@@ -377,7 +379,7 @@ class AppState extends ChangeNotifier {
   Timer? _persistDebounce;
   bool _persistBusy = false;
 
-  /// リリース（配布）ビルドのモックモードでは、自分の募集・
+  /// リリース（配布）ビルドのモックモードでは、自分の募集・釣果速報・
   /// コミュニティ・部屋・メッセージを端末内に保存し、再起動後も残す。
   /// 開発・テストビルドではオフ（シード・テスト動作を壊さないため）。
   /// Supabase モードでは Postgres が永続化するため対象外。
@@ -426,6 +428,11 @@ class AppState extends ChangeNotifier {
           .toList(),
       'communities': _communities.map(persist.communityToMap).toList(),
       'events': events.map(persist.communityEventToMap).toList(),
+      // シード(id付き cr-seed-)は保存しない（再ログイン時に再生成される）
+      'catchReports': _catchReports
+          .where((p) => p.reporterId == me!.id && !p.id.startsWith('cr-seed-'))
+          .map(persist.catchReportToMap)
+          .toList(),
     };
   }
 
@@ -485,6 +492,11 @@ class AppState extends ChangeNotifier {
           .whereType<CommunityEvent>()) {
         _eventsByCommunity.putIfAbsent(e.communityId, () => []).add(e);
       }
+      _catchReports
+        ..clear()
+        ..addAll(((pruned['catchReports'] as List?) ?? const [])
+            .map((e) => persist.catchReportFromMap(e as Map<String, dynamic>))
+            .whereType<CatchReport>());
       return true;
     } catch (_) {
       // 壊れたスナップショットは無視して普通に初期化
@@ -558,6 +570,21 @@ class AppState extends ChangeNotifier {
         if (!exists) {
           _rooms.add(room);
           _messages.putIfAbsent(room.id, () => []);
+        }
+      }
+      // 釣果速報
+      final reports = await supabaseData.fetchCatchReports(me!);
+      _catchReports
+        ..clear()
+        ..addAll(reports);
+      for (final rep in reports) {
+        if (!_users.containsKey(rep.reporterId)) {
+          try {
+            final reporter = await supabaseData.fetchProfileById(rep.reporterId);
+            if (reporter != null) _users[rep.reporterId] = reporter;
+          } catch (_) {
+            // 無視
+          }
         }
       }
       unawaited(refreshCommunities());
@@ -1323,6 +1350,108 @@ class AppState extends ChangeNotifier {
     _rooms.insert(0, room);
     _messages[room.id] = [];
     return room;
+  }
+
+  // ------------------------------------------------- catch reports
+
+  final List<CatchReport> _catchReports = [];
+
+  /// 掲載終了とブロック済みユーザーの投稿を除いた釣果速報の一覧
+  /// （距離近い順）
+  List<CatchReport> get catchReports {
+    if (me == null) return const [];
+    return _catchReports
+        .where((r) => !r.closed && !isBlocked(r.reporterId))
+        .toList()
+      ..sort((a, b) => _catchReportKm(a).compareTo(_catchReportKm(b)));
+  }
+
+  double _catchReportKm(CatchReport r) {
+    if (me == null) return double.infinity;
+    return haversineKm(me!.lat, me!.lng, r.lat, r.lng);
+  }
+
+  /// 登録までの粗い距離バンド
+  String catchReportDistanceLabel(CatchReport r) {
+    final km = _catchReportKm(r);
+    return km.isFinite ? distanceLabel(km) : '';
+  }
+
+  /// 釣果速報（海 / 川・湖）を登録する
+  Future<CatchReport> registerCatchReport({
+    required String kind,
+    required String fishDescription,
+    required String areaName,
+    required String detail,
+    String? photoPath,
+  }) async {
+    if (_remote) {
+      // アップロード失敗で端末内パス（http で始まらない）が返ってきた場合、
+      // 他の端末から見えないため photoPath として保存しない
+      final effectivePhoto = (photoPath != null &&
+              photoPath.isNotEmpty &&
+              photoPath.startsWith('http'))
+          ? photoPath
+          : null;
+      final created = await supabaseData.createCatchReport(
+        kind: kind,
+        fishDescription: fishDescription,
+        areaName: areaName,
+        detail: detail,
+        photoPath: effectivePhoto,
+        lat: me!.lat,
+        lng: me!.lng,
+      );
+      _catchReports.insert(0, created);
+      notifyListeners();
+      return created;
+    }
+    final report = CatchReport(
+      id: 'cr-${_seq++}',
+      reporterId: me!.id,
+      kind: kind,
+      fishDescription: fishDescription,
+      areaName: areaName,
+      detail: detail,
+      photoPath: photoPath,
+      lat: me!.lat,
+      lng: me!.lng,
+      createdAt: _now(),
+    );
+    _catchReports.insert(0, report);
+    notifyListeners();
+    return report;
+  }
+
+  /// 登録を掲載終了にする（釣行が終わった、情報が古くなった等）
+  Future<void> closeCatchReport(String id) async {
+    for (final r in _catchReports) {
+      if (r.id == id) {
+        r.closed = true;
+        break;
+      }
+    }
+    notifyListeners();
+    if (_remote) {
+      try {
+        await supabaseData.closeCatchReport(id);
+      } catch (_) {
+        // 無視（再取得で同期される）
+      }
+    }
+  }
+
+  /// モック: シードの釣果速報を現在地周囲に配置する
+  void _seedMockCatchReports() {
+    if (_catchReports.any((r) => r.id.startsWith('cr-seed-'))) return;
+    _catchReports.addAll(buildSeedCatchReports(_now(), anchorLat, anchorLng));
+  }
+
+  /// 実 GPS で現在地が変わったら、シードの投稿も作り直す（開発ビルドのみ）
+  void _replaceMockCatchReportSeeds() {
+    if (_remote || !_useMockData) return;
+    _catchReports.removeWhere((r) => r.id.startsWith('cr-seed-'));
+    _catchReports.addAll(buildSeedCatchReports(_now(), anchorLat, anchorLng));
   }
 
   // ------------------------------------------------------------ rooms / DM

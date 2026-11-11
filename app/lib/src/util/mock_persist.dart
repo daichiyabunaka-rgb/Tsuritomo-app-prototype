@@ -167,6 +167,41 @@ CommunityEvent? communityEventFromMap(Map<String, dynamic> m) {
   }
 }
 
+Map<String, dynamic> catchReportToMap(CatchReport r) => {
+      'id': r.id,
+      'reporterId': r.reporterId,
+      'kind': r.kind,
+      'fishDescription': r.fishDescription,
+      'areaName': r.areaName,
+      'detail': r.detail,
+      'photoPath': r.photoPath,
+      'lat': r.lat,
+      'lng': r.lng,
+      'createdAt': r.createdAt.toIso8601String(),
+      'closed': r.closed,
+    };
+
+CatchReport? catchReportFromMap(Map<String, dynamic> m) {
+  try {
+    final report = CatchReport(
+      id: m['id'] as String,
+      reporterId: m['reporterId'] as String,
+      kind: m['kind'] as String,
+      fishDescription: m['fishDescription'] as String,
+      areaName: m['areaName'] as String,
+      detail: m['detail'] as String,
+      photoPath: m['photoPath'] as String?,
+      lat: (m['lat'] as num).toDouble(),
+      lng: (m['lng'] as num).toDouble(),
+      createdAt: DateTime.parse(m['createdAt'] as String),
+      closed: m['closed'] as bool? ?? false,
+    );
+    return report;
+  } catch (_) {
+    return null;
+  }
+}
+
 /// 保存済みスナップショットを「自分のもの」だけに刈り込む。
 /// 別アカウントで同じ端末からログインした場合に前アカウントの
 /// データが混ざらないための防護。
@@ -218,6 +253,12 @@ Map<String, dynamic> pruneSnapshotToOwner(
       .where((e) => e != null && communityIds.contains(e.communityId))
       .cast<CommunityEvent>()
       .toList();
+  final reports = ((snapshot['catchReports'] as List?) ?? const [])
+      .map((e) => e as Map<String, dynamic>)
+      .map(catchReportFromMap)
+      .where((r) => r != null && r.reporterId == myId)
+      .cast<CatchReport>()
+      .toList();
   return {
     'recruitments': recs.map(recruitmentToMap).toList(),
     'applications': apps.map(joinApplicationToMap).toList(),
@@ -225,5 +266,6 @@ Map<String, dynamic> pruneSnapshotToOwner(
     'messages': messages.map(chatMessageToMap).toList(),
     'communities': communities.map(communityToMap).toList(),
     'events': events.map(communityEventToMap).toList(),
+    'catchReports': reports.map(catchReportToMap).toList(),
   };
 }

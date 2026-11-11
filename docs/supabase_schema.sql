@@ -270,6 +270,33 @@ create policy "ブロックは本人のみ" on public.blocks
   for all using (auth.uid() = blocker_id);
 
 -- ------------------------------------------------------------
+-- 6.x 釣果速報の登録（近隣共有。位置は geohash のみ保持）
+-- 海・川・湖の釣果を近隣の釣り人と共有する（遊漁ルールの遵守を常に案内）
+-- ------------------------------------------------------------
+create table public.catch_reports (
+  id uuid primary key default gen_random_uuid(),
+  reporter_id uuid not null references public.profiles(id) on delete cascade,
+  kind text not null check (kind in ('sea', 'fresh')),
+  fish_description text not null,
+  area_name text not null,
+  detail text not null default '',
+  photo_path text,                           -- 投稿写真（Storage 'catch-photos' バケットの公開URL）
+  location_geohash text not null,
+  closed boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create index catch_reports_geohash_idx on public.catch_reports (location_geohash);
+
+alter table public.catch_reports enable row level security;
+create policy "釣果速報は誰でも閲覧可" on public.catch_reports
+  for select using (true);
+create policy "登録は本人のみ" on public.catch_reports
+  for insert with check (auth.uid() = reporter_id);
+create policy "更新削除は本人のみ" on public.catch_reports
+  for update using (auth.uid() = reporter_id);
+create policy "削除は本人のみ" on public.catch_reports
+  for delete using (auth.uid() = reporter_id);
+
 -- ============================================================
 -- 7. 補助関数
 -- ============================================================
