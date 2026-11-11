@@ -393,43 +393,6 @@ class CommunityEvent {
   }
 }
 
-/// 釣果速報の登録（近隣での情報共有）。
-/// kind: 'sea'    = 海での釣果
-///       'fresh'  = 川・湖での釣果
-/// 釣り場の最新状況を近くの釣り人と共有する機能。写真・登録者へのDMつき。
-/// 掲載終了（情報が古くなった等）は登録者が管理できる。
-class CatchReport {
-  final String id;
-  final String reporterId;
-  final String kind; // 'sea' | 'fresh'
-  final String fishDescription; // 魚種・釣り方・サイズなど
-  final String areaName; // 釣り場・ポイント
-  final String detail; // 状況・タックル情報の自由記述
-  final String? photoPath; // 投稿写真（端末内パス or 公開URL）
-  final double lat;
-  final double lng;
-  final DateTime createdAt;
-  bool closed; // 掲載終了（情報が古くなった、釣行が終わった等）
-
-  CatchReport({
-    required this.id,
-    required this.reporterId,
-    required this.kind,
-    required this.fishDescription,
-    required this.areaName,
-    required this.detail,
-    required this.lat,
-    required this.lng,
-    required this.createdAt,
-    this.photoPath,
-    this.closed = false,
-  });
-
-  bool get isSea => kind == 'sea';
-
-  bool get isFresh => kind == 'fresh';
-}
-
 class ChatMessage {
   final String id;
   final String roomId;

@@ -240,7 +240,7 @@ void main() {
     });
   });
   group('端末内スナップショット（モック永続化）', () {
-    test('募集・釣果・コミュニティは保存用Mapとの往復ができる', () {
+    test('募集・コミュニティは保存用Mapとの往復ができる', () {
       final now = DateTime(2026, 3, 1, 12, 0);
       final rec = Recruitment(
         id: 'r-1',
@@ -259,24 +259,6 @@ void main() {
       expect(restored!.id, rec.id);
       expect(restored.title, rec.title);
       expect(restored.memberIds, rec.memberIds);
-
-      final report = CatchReport(
-        id: 'cr-1',
-        reporterId: 'me',
-        kind: 'sea',
-        fishDescription: 'テスト魚（30cm・サビキ）',
-        areaName: 'テスト堤防',
-        detail: '状況メモ',
-        lat: 35.0,
-        lng: 139.0,
-        createdAt: now,
-        photoPath: '/data/user/0/catch_photos/catch_photo_1.jpg',
-      );
-      final restoredReport = persist.catchReportFromMap(
-          persist.catchReportToMap(report));
-      expect(restoredReport!.kind, 'sea');
-      expect(restoredReport.photoPath, report.photoPath);
-      expect(restoredReport.createdAt, report.createdAt);
 
       final com = Community(
         id: 'c-1',
@@ -319,42 +301,13 @@ void main() {
         expiresAt: now.subtract(const Duration(hours: 1)),
         memberIds: const ['me'],
       );
-      final othersReport = CatchReport(
-        id: 'cr-other',
-        reporterId: 'someone-else',
-        kind: 'sea',
-        fishDescription: '他人の投稿',
-        areaName: 'どこか',
-        detail: '',
-        lat: 35.0,
-        lng: 139.0,
-        createdAt: now,
-      );
-      final myReport = CatchReport(
-        id: 'cr-mine',
-        reporterId: 'me',
-        kind: 'sea',
-        fishDescription: '自分の投稿',
-        areaName: 'どこか',
-        detail: '',
-        lat: 35.0,
-        lng: 139.0,
-        createdAt: now,
-      );
       final snapshot = {
         'recruitments': [rec, expired].map(persist.recruitmentToMap).toList(),
-        'catchReports': [othersReport, myReport]
-            .map(persist.catchReportToMap)
-            .toList(),
       };
       final pruned = persist.pruneSnapshotToOwner(snapshot, 'me');
       final recIds =
           (pruned['recruitments'] as List).map((e) => e['id'] as String).toList();
       expect(recIds, ['r-mine']); // 期限切れは捨てる
-      final reportIds = (pruned['catchReports'] as List)
-          .map((e) => e['id'] as String)
-          .toList();
-      expect(reportIds, ['cr-mine']); // 他人の投稿は捨てる
     });
   });
 
@@ -751,41 +704,6 @@ void main() {
       }
     });
 
-    test('釣果速報: シードは近い順に並び、海・川湖両方を含む', () {
-      final state = AppState();
-      state.attachUser(_testUser(state), reseed: true);
-      final reports = state.catchReports;
-      expect(reports, isNotEmpty);
-      expect(reports.any((r) => r.isSea), isTrue);
-      expect(reports.any((r) => r.isFresh), isTrue);
-      final me = state.me!;
-      double km(CatchReport r) => haversineKm(me.lat, me.lng, r.lat, r.lng);
-      for (var i = 1; i < reports.length; i++) {
-        expect(km(reports[i - 1]), lessThanOrEqualTo(km(reports[i])));
-      }
-      for (final r in reports) {
-        // 相対配置されているので全シードが現在地の近くにある
-        expect(km(r), lessThan(6.0));
-        expect(state.catchReportDistanceLabel(r), isNotEmpty);
-      }
-    });
-
-    test('釣果速報: 登録して一覧に出し、掲載終了で消える', () async {
-      final state = AppState();
-      state.attachUser(_testUser(state), reseed: true);
-      final created = await state.registerCatchReport(
-        kind: 'sea',
-        fishDescription: 'テスト魚（30cm・サビキ）',
-        areaName: 'テスト堤防',
-        detail: '回遊あり',
-        photoPath: '/data/catch_photos/catch_photo_1.jpg',
-      );
-      expect(created.isSea, isTrue);
-      expect(created.photoPath, '/data/catch_photos/catch_photo_1.jpg');
-      expect(state.catchReports.any((r) => r.id == created.id), isTrue);
-      await state.closeCatchReport(created.id);
-      expect(state.catchReports.any((r) => r.id == created.id), isFalse);
-    });
   });
 
   group('models', () {
