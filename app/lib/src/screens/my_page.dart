@@ -6,6 +6,7 @@ import '../services/app_state.dart';
 import '../services/auth_service.dart';
 import '../services/location_service.dart';
 import 'invite_sheet.dart';
+import 'tomotsuku_settings_screen.dart';
 import 'widgets.dart';
 import 'profile_setup_screen.dart';
 
@@ -177,6 +178,21 @@ class MyPage extends StatelessWidget {
                     subtitle: const Text('SNSで「一緒に使いませんか？」を送る'),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => showInviteSheet(context),
+                  ),
+                ),
+                Card(
+                  child: ListTile(
+                    leading: Icon(Icons.hub_outlined,
+                        color: theme.colorScheme.primary),
+                    title: const Text('ともつく！連携'),
+                    subtitle:
+                        const Text('使っているアプリと公開範囲の設定'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const TomoTskuSettingsScreen(),
+                      ),
+                    ),
                   ),
                 ),
                 Card(

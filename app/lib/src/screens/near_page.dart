@@ -221,6 +221,12 @@ class _NearPageState extends State<NearPage> {
                           fontSize: 11,
                           color: Theme.of(context).colorScheme.primary),
                     ),
+                    if (u.isOtherApp)
+                      Text(
+                        u.appSourceLabel,
+                        style: TextStyle(
+                            fontSize: 10, color: Colors.teal.shade700),
+                      ),
                   ],
                 ),
               );

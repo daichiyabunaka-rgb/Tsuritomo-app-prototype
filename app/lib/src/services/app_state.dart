@@ -572,6 +572,19 @@ class AppState extends ChangeNotifier {
           _messages.putIfAbsent(room.id, () => []);
         }
       }
+      // 部屋のメンバー（ともつく！横断DMの相手を含む）のうち、
+      // 取得できていないいるユーザーのプロフィールを補完する
+      for (final room in rooms) {
+        for (final memberId in room.memberIds) {
+          if (memberId == me!.id || _users.containsKey(memberId)) continue;
+          try {
+            final member = await supabaseData.fetchAnyProfileById(memberId);
+            if (member != null) _users[memberId] = member;
+          } catch (_) {
+            // 補完失敗は無視（次の更新で再試行）
+          }
+        }
+      }
       // 釣果速報
       final reports = await supabaseData.fetchCatchReports(me!);
       _catchReports
@@ -1485,8 +1498,11 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 特定ユーザーとの DM ルームを取得（なければ作る）
-  Future<ChatRoom> getOrCreateDm(String otherUserId) async {
+  /// 特定ユーザーとの DM ルームを取得（なければ作る）。
+  /// [crossApp] が true の場合、他のともつく！アプリのユーザーとの
+  /// 横断DM（app_id='cross' の部屋）を作る。
+  Future<ChatRoom> getOrCreateDm(String otherUserId,
+      {bool crossApp = false}) async {
     for (final room in _rooms) {
       if (room.isDm &&
           room.memberIds.contains(me!.id) &&
@@ -1495,7 +1511,8 @@ class AppState extends ChangeNotifier {
       }
     }
     if (_remote) {
-      final roomId = await supabaseData.getOrCreateDm(otherUserId);
+      final roomId = await supabaseData.getOrCreateDm(otherUserId,
+          crossApp: crossApp);
       final room = ChatRoom(
         id: roomId,
         recruitmentId: '',

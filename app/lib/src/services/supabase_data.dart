@@ -69,13 +69,16 @@ class SupabaseData {
   }
 
   /// 近くの一般ユーザー / 店舗（geohash プレフィックス、近百人）。
-  /// 共有プロジェクト内でこのアプリのプロフィール行だけを対象にする。
+  /// 共有プロジェクト内で:
+  /// - このアプリのプロフィール行
+  /// - 他アプリで cross_app_visible = true（ともつく！全体公開）の行
+  /// を対象にする。
   Future<List<AppUser>> fetchNearbyUsers(AppUser me) async {
     final rows = await _c
         .from('profiles')
         .select()
         .neq('id', _myId)
-        .eq('app_id', AppConfig.appId)
+        .or('app_id.eq.${AppConfig.appId},cross_app_visible.eq.true')
         .not('location_geohash', 'is', null)
         .limit(100);
     final users = <AppUser>[];
@@ -99,6 +102,10 @@ class SupabaseData {
     final gh = row['location_geohash'] as String?;
     final (lat, lng) =
         gh == null ? (35.6812, 139.7671) : geohashDecode(gh);
+    final rowAppId = row['app_id'] as String?;
+    final appSource =
+        (rowAppId != null && rowAppId != AppConfig.appId) ? rowAppId : null;
+    final crossAppVisible = (row['cross_app_visible'] as bool?) ?? false;
     final isBusiness = row['role'] == 'business';
     if (isBusiness) {
       return BusinessUser(
@@ -116,6 +123,8 @@ class SupabaseData {
         websiteUrl: row['website_url'] as String?,
         snsNote: row['sns_note'] as String?,
         phone: row['phone'] as String?,
+        appSource: appSource,
+        crossAppVisible: crossAppVisible,
       );
     }
     return AppUser(
@@ -131,6 +140,8 @@ class SupabaseData {
       websiteUrl: row['website_url'] as String?,
       snsNote: row['sns_note'] as String?,
       phone: row['phone'] as String?,
+      appSource: appSource,
+      crossAppVisible: crossAppVisible,
     );
   }
 
@@ -352,11 +363,14 @@ class SupabaseData {
         .toList();
   }
 
-  /// DM の部屋を取得（なければ作成）。戻り値は roomId
-  Future<String> getOrCreateDm(String otherUserId) async {
+  /// DM の部屋を取得（なければ作成）。戻り値は roomId。
+  /// [crossApp] が true の場合、他のともつく！アプリのユーザーとの
+  /// 横断DM（app_id='cross' の部屋）を作る。
+  Future<String> getOrCreateDm(String otherUserId,
+      {bool crossApp = false}) async {
     final res = await _c.rpc('get_or_create_dm', params: {
       'p_other_user': otherUserId,
-      'p_app': AppConfig.appId,
+      'p_app': crossApp ? 'cross' : AppConfig.appId,
     });
     return res as String;
   }
@@ -399,14 +413,14 @@ class SupabaseData {
   }
 
   /// 自分が参加している部屋（メンバー一覧も取得）。
-  /// 共有プロジェクトではこのアプリの部屋だけを対象にする。
+  /// 共有プロジェクトでは「このアプリの部屋」＋「横断DM（cross）」を対象にする。
   Future<List<ChatRoom>> fetchMyRooms() async {
     final rows = await _c
         .from('chat_room_members')
         .select(
             'room_id, chat_rooms!inner(id, recruitment_id, type, app_id, created_at)')
         .eq('user_id', _myId)
-        .eq('chat_rooms.app_id', AppConfig.appId)
+        .or('chat_rooms.app_id.eq.${AppConfig.appId},chat_rooms.app_id.eq.cross')
         .order('joined_at', ascending: false)
         .limit(20);
     final rooms = <ChatRoom>[];
@@ -486,7 +500,8 @@ extension CommunityData on SupabaseData {
     });
   }
 
-  /// 1人のプロフィールを取得（コミュニティオーナー等の補完に使う）
+  /// 1人のプロフィールを取得（コミュニティオーナー等の補完に使う）。
+  /// 他アプリのユーザーは取得できない。
   Future<AppUser?> fetchProfileById(String id) async {
     final rows = await _c
         .from('profiles')
@@ -497,6 +512,57 @@ extension CommunityData on SupabaseData {
     final list = rows as List;
     if (list.isEmpty) return null;
     return _rowToUser(Map<String, dynamic>.from(list.first as Map));
+  }
+
+  /// 1人の「表示用」プロフィールを取得（アプリ横断。
+  /// このアプリの行 → なければ全体公開の行、の順で選ぶ）。
+  /// チャット参加者の補完などに使う。
+  Future<AppUser?> fetchAnyProfileById(String id) async {
+    final rows = await _c
+        .from('profiles')
+        .select()
+        .eq('id', id)
+        .order('app_id')
+        .limit(10);
+    final list = (rows as List).cast<Map<String, dynamic>>();
+    if (list.isEmpty) return null;
+    final mineRow = list.firstWhere(
+      (r) => r['app_id'] == AppConfig.appId,
+      orElse: () => list.first,
+    );
+    final visibleRow = list.firstWhere(
+      (r) => (r['cross_app_visible'] as bool?) == true,
+      orElse: () => mineRow,
+    );
+    final chosen =
+        (mineRow['app_id'] == AppConfig.appId) ? mineRow : visibleRow;
+    return _rowToUser(chosen);
+  }
+
+  /// ともつく！連携: 指定ユーザーの全アプリプロフィール一覧
+  /// （app_id と全体公開のROPみ）。設定画面と「使っているアプリ」表示で使う。
+  Future<List<({String appId, bool crossAppVisible, String nickname})>>
+      fetchTomoTskuProfiles(String userId) async {
+    final rows = await _c
+        .from('profiles')
+        .select('app_id, cross_app_visible, nickname')
+        .eq('id', userId)
+        .order('app_id');
+    return [
+      for (final r in (rows as List).cast<Map<String, dynamic>>())
+        (
+          appId: r['app_id'] as String,
+          crossAppVisible: (r['cross_app_visible'] as bool?) ?? false,
+          nickname: (r['nickname'] as String?) ?? '',
+        ),
+    ];
+  }
+
+  /// ともつく！連携: 自分のプロフィール行（appId）の全体公開を切り替える
+  Future<void> setCrossAppVisible(String appId, bool value) async {
+    await _c.from('profiles').update({
+      'cross_app_visible': value,
+    }).eq('id', _myId).eq('app_id', appId);
   }
 
   /// コミュニティ一覧（参加メンバーの id も一緒に取得）。このアプリのものだけ。

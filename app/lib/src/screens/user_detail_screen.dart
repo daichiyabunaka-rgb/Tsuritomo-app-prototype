@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models.dart';
+import '../services/app_config.dart';
 import '../services/app_state.dart';
+import '../services/supabase_data.dart';
 import 'chat_screen.dart';
 import 'widgets.dart';
 
@@ -137,6 +139,10 @@ class UserDetailScreen extends StatelessWidget {
                     style: theme.textTheme.headlineSmall!
                         .copyWith(fontWeight: FontWeight.bold),
                   ),
+                  if (user.isOtherApp) ...[
+                    const SizedBox(height: 4),
+                    _appBadge(theme, user.appSourceLabel),
+                  ],
                   Text(
                     user.isBusiness
                         ? '${(user as BusinessUser).storeType} / '
@@ -235,15 +241,22 @@ class UserDetailScreen extends StatelessWidget {
               ),
             ),
           ),
+          if (AppConfig.useSupabase) ...[
+            const SizedBox(height: 8),
+            _tomoTskuAppsSection(context, user),
+          ],
           if (!isMe) ...[
             const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
                 icon: const Icon(Icons.chat_bubble_outline),
-                label: const Text('DMを始める'),
+                label: Text(user.isOtherApp
+                    ? '${user.appSourceLabel}とうちにDMする'
+                    : 'DMを始める'),
                 onPressed: () async {
-                  final room = await appState.getOrCreateDm(user.id);
+                  final room = await appState.getOrCreateDm(user.id,
+                      crossApp: user.isOtherApp);
                   if (!context.mounted) return;
                   Navigator.of(context).push(
                     MaterialPageRoute<void>(
@@ -281,6 +294,61 @@ class UserDetailScreen extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+
+  /// 他のともつく！アプリ由来であることを示すバッジ
+  Widget _appBadge(ThemeData theme, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.teal.shade50,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.teal.shade200),
+      ),
+      child: Text(
+        '$labelから',
+        style: TextStyle(fontSize: 12, color: Colors.teal.shade700),
+      ),
+    );
+  }
+
+  /// 「使っているともつく！」（全体公開に設定されたアプリのみ表示）
+  Widget _tomoTskuAppsSection(BuildContext context, AppUser user) {
+    final theme = Theme.of(context);
+    return FutureBuilder<
+        List<({String appId, bool crossAppVisible, String nickname})>>(
+      future: supabaseData.fetchTomoTskuProfiles(user.id),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const SizedBox.shrink();
+        // このアプリの行は除外し、全体公開の他アプリだけ表示する
+        final apps = snapshot.data!
+            .where((p) => p.appId != AppConfig.appId)
+            .where((p) => p.crossAppVisible)
+            .map((p) => tomoTskuAppNames[p.appId] ?? p.appId)
+            .toList();
+        if (apps.isEmpty) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.hub_outlined,
+                  size: 16, color: theme.colorScheme.primary),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  'ともつく！: ${apps.join('・')} も利用中',
+                  style: theme.textTheme.bodySmall!.copyWith(
+                    color: theme.colorScheme.primary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

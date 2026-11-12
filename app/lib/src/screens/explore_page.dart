@@ -137,7 +137,9 @@ class _ExplorePageState extends State<ExplorePage> {
               title: Text(u.nickname,
                   style: const TextStyle(fontWeight: FontWeight.bold)),
               subtitle: Text(
-                '${u.decade} / ${u.genderLabel} / ${distanceLabel(_distanceKm(u))}',
+                u.isOtherApp
+                    ? '${u.appSourceLabel}から / ${distanceLabel(_distanceKm(u))}'
+                    : '${u.decade} / ${u.genderLabel} / ${distanceLabel(_distanceKm(u))}',
               ),
               trailing: Wrap(
                 spacing: 4,
