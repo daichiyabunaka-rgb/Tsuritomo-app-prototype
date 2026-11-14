@@ -25,6 +25,7 @@ const Map<String, String> tomoTskuAppNames = {
   'tsuritomo': '釣りとも！',
   'nekotomo': 'ニーアキャット',
   'costomo': 'コスとも！',
+  'hashitomo': '走りとも！',
 };
 
 /// 興味カテゴリ。
