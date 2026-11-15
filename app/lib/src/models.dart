@@ -28,6 +28,7 @@ const Map<String, String> tomoTskuAppNames = {
   'hashitomo': '走りとも！',
   'campotomo': 'キャンとも！',
   'ototomo': '音とも！',
+  'yutomo': '湯とも！',
 };
 
 /// 興味カテゴリ。
