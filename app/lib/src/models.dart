@@ -429,17 +429,19 @@ class CommunityEvent {
   }
 }
 
-/// 釣果速報の登録（近隣での情報共有）。
-/// kind: 'sea'    = 海での釣果
-///       'fresh'  = 川・湖での釣果
+/// 近況報告の登録（近隣での情報共有）。
+/// kind: 'catch' = 釣果（海・川での釣果の報告）
+///       'post'  = つぶやき（近況・ひとことの報告）
+///       'event' = イベント（釣りイベント・オフ会等の報告）
+///       'art'   = 絵（描いた絵・釣りに関するイラストの投稿）
 /// 釣り場の最新状況を近くの釣り人と共有する機能。写真・登録者へのDMつき。
 /// 掲載終了（情報が古くなった等）は登録者が管理できる。
 class CatchReport {
   final String id;
   final String reporterId;
-  final String kind; // 'sea' | 'fresh'
-  final String fishDescription; // 魚種・釣り方・サイズなど
-  final String areaName; // 釣り場・ポイント
+  final String kind; // 'catch' | 'post' | 'event' | 'art'
+  final String fishDescription; // タイトル（魚種・できごとなど）
+  final String areaName; // 釣り場・ポイント（絵は任意）
   final String detail; // 状況・タックル情報の自由記述
   final String? photoPath; // 投稿写真（端末内パス or 公開URL）
   final double lat;
@@ -461,9 +463,17 @@ class CatchReport {
     this.closed = false,
   });
 
-  bool get isSea => kind == 'sea';
+  /// 釣果の報告
+  bool get isCatch => kind == 'catch';
 
-  bool get isFresh => kind == 'fresh';
+  /// つぶやき（近況・ひとこと）
+  bool get isPost => kind == 'post';
+
+  /// イベントの報告
+  bool get isEvent => kind == 'event';
+
+  /// 描いた絵・イラストの投稿
+  bool get isArt => kind == 'art';
 }
 
 class ChatMessage {

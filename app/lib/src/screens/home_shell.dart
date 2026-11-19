@@ -7,7 +7,7 @@ import 'my_page.dart';
 import 'near_page.dart';
 import 'rooms_page.dart';
 
-/// ホーム: 近く / 部屋 / コミュニティ / 釣果速報 / 探す / マイページ（仕様書 8 章参照）
+/// ホーム: 近く / 部屋 / コミュニティ / 近況報告 / 探す / マイページ（仕様書 8 章参照）
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -54,7 +54,7 @@ class _HomeShellState extends State<HomeShell> {
           NavigationDestination(
             icon: Icon(Icons.set_meal_outlined),
             selectedIcon: Icon(Icons.set_meal),
-            label: '釣果速報',
+            label: '近況報告',
           ),
           NavigationDestination(
             icon: Icon(Icons.search),

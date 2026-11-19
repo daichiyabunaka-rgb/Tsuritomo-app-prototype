@@ -10,7 +10,8 @@ import 'chat_screen.dart';
 import 'user_detail_screen.dart';
 import 'widgets.dart';
 
-/// 「釣果速報」タブ: 海・川・湖での釣果を近隣で共有する（FR-7-1〜7-4）。
+/// 「近況報告」タブ: 釣りの近況・釣果・イベントを近隣で共有する（FR-7-1〜7-4）。
+/// kind: 'catch'（釣果）/ 'post'（つぶやき）/ 'event'（イベント）/ 'art'（絵）。
 /// 釣れた魚・状況を投稿して近くの釣り人とつながる。掲載終了は登録者が管理。
 /// 遊漁ルールの遵守・釣り禁止区域の確認を常に案内する設計。
 class CatchReportsPage extends StatefulWidget {
@@ -21,7 +22,7 @@ class CatchReportsPage extends StatefulWidget {
 }
 
 class _CatchReportsPageState extends State<CatchReportsPage> {
-  String _filter = 'all'; // 'all' | 'sea' | 'fresh'
+  String _filter = 'all'; // 'all' | 'catch' | 'post' | 'event' | 'art'
 
   @override
   Widget build(BuildContext context) {
@@ -30,7 +31,7 @@ class _CatchReportsPageState extends State<CatchReportsPage> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => showCatchReportCreateSheet(context),
         icon: const Icon(Icons.camera_alt_outlined),
-        label: const Text('釣果を登録する'),
+        label: const Text('報告する'),
       ),
       body: SafeArea(
         child: ListenableBuilder(
@@ -40,10 +41,7 @@ class _CatchReportsPageState extends State<CatchReportsPage> {
             final reports = _filter == 'all'
                 ? all
                 : all
-                      .where(
-                        (r) =>
-                            _filter == 'sea' ? r.isSea : r.isFresh,
-                      )
+                      .where((r) => r.kind == _filter)
                       .toList();
             return RefreshIndicator(
               onRefresh: () => appState.refreshFromRemote(),
@@ -52,7 +50,7 @@ class _CatchReportsPageState extends State<CatchReportsPage> {
                 padding: const EdgeInsets.all(16),
                 children: [
                   Text(
-                    '釣果速報',
+                    '近況報告',
                     style: theme.textTheme.titleLarge!.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
@@ -62,9 +60,13 @@ class _CatchReportsPageState extends State<CatchReportsPage> {
                     segments: const [
                       ButtonSegment(value: 'all', label: Text('すべて')),
                       ButtonSegment(
-                          value: 'sea', label: Text('海')),
+                          value: 'catch', label: Text('釣果')),
                       ButtonSegment(
-                          value: 'fresh', label: Text('川・湖')),
+                          value: 'post', label: Text('つぶやき')),
+                      ButtonSegment(
+                          value: 'event', label: Text('イベント')),
+                      ButtonSegment(
+                          value: 'art', label: Text('絵')),
                     ],
                     selected: {_filter},
                     onSelectionChanged: (s) =>
@@ -72,8 +74,8 @@ class _CatchReportsPageState extends State<CatchReportsPage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '近くで登録された釣果を近い順に表示します。'
-                    '釣れた魚・釣り場の状況を投稿して、'
+                    '近くの釣り仲間の近況・釣果・イベント・絵の報告を'
+                    '近い順に表示します。報告を見て、'
                     '近くの釣り仲間とつながりましょう。',
                     style: theme.textTheme.bodySmall,
                   ),
@@ -91,8 +93,8 @@ class _CatchReportsPageState extends State<CatchReportsPage> {
                       padding: const EdgeInsets.all(32),
                       child: Center(
                         child: Text(
-                          '近くに釣果登録はまだありません。\n'
-                          '「釣果を登録する」から最初の投稿をお願いします。',
+                          '近くに報告はまだありません。\n'
+                          '「報告する」から最初の近況報告をお願いします。',
                           textAlign: TextAlign.center,
                           style: theme.textTheme.bodySmall,
                         ),
@@ -114,9 +116,34 @@ class _CatchReportsPageState extends State<CatchReportsPage> {
     final reporter = appState.userById(r.reporterId);
     final isMine = r.reporterId == appState.me!.id;
     final now = DateTime.now();
-    final seaColor = Colors.teal.shade700;
-    final freshColor = Colors.lightBlue.shade700;
-    final color = r.isSea ? seaColor : freshColor;
+    final catchColor = Colors.teal.shade700;
+    final postColor = Colors.blue.shade700;
+    final eventColor = Colors.deepPurple.shade700;
+    final artColor = Colors.orange.shade700;
+    final color = r.isCatch
+        ? catchColor
+        : (r.isPost
+            ? postColor
+            : (r.isEvent ? eventColor : artColor));
+    final bg = r.isCatch
+        ? Colors.teal.shade50
+        : (r.isPost
+            ? Colors.blue.shade50
+            : (r.isEvent
+                ? Colors.deepPurple.shade50
+                : Colors.orange.shade50));
+    final border = r.isCatch
+        ? Colors.teal.shade200
+        : (r.isPost
+            ? Colors.blue.shade200
+            : (r.isEvent
+                ? Colors.deepPurple.shade200
+                : Colors.orange.shade200));
+    final label = r.isCatch
+        ? '釣果'
+        : (r.isPost
+            ? 'つぶやき'
+            : (r.isEvent ? 'イベント' : '絵'));
     return Card(
       margin: const EdgeInsets.only(top: 10),
       child: Padding(
@@ -132,18 +159,14 @@ class _CatchReportsPageState extends State<CatchReportsPage> {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: r.isSea
-                        ? Colors.teal.shade50
-                        : Colors.lightBlue.shade50,
+                    color: bg,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: r.isSea
-                          ? Colors.teal.shade200
-                          : Colors.lightBlue.shade200,
+                      color: border,
                     ),
                   ),
                   child: Text(
-                    r.isSea ? '海' : '川・湖',
+                    label,
                     style: TextStyle(fontSize: 12, color: color),
                   ),
                 ),
@@ -179,7 +202,7 @@ class _CatchReportsPageState extends State<CatchReportsPage> {
                 Icon(Icons.schedule, size: 14, color: Colors.grey.shade600),
                 const SizedBox(width: 2),
                 Text(
-                  '${elapsedLabel(r.createdAt, now)}の登録 / '
+                  '${elapsedLabel(r.createdAt, now)}の報告 / '
                   '${appState.catchReportDistanceLabel(r)}',
                   style: theme.textTheme.bodySmall,
                 ),
@@ -297,7 +320,7 @@ class _CatchReportsPageState extends State<CatchReportsPage> {
         title: const Text('掲載終了にしますか？'),
         content: const Text(
           '釣行が終わった、情報が古くなった等、共有を終える場合に設定します。'
-          '掲載終了の登録は一覧から表示されなくなります。',
+          '掲載終了の報告は一覧から表示されなくなります。',
         ),
         actions: [
           TextButton(

@@ -820,7 +820,7 @@ extension CommunityData on SupabaseData {
     );
   }
 
-  /// 近くの釣果速報の登録（geohash 先頭4桁一致 = 約20km四方）
+  /// 近くの近況報告の登録（geohash 先頭4桁一致 = 約20km四方）
   Future<List<CatchReport>> fetchCatchReports(AppUser me) async {
     final rows = await _c
         .from('catch_reports')
@@ -841,7 +841,7 @@ extension CommunityData on SupabaseData {
     return reports;
   }
 
-  /// 釣果速報を登録する
+  /// 近況報告を登録する
   Future<CatchReport> createCatchReport({
     required String kind,
     required String fishDescription,

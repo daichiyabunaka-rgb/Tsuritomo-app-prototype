@@ -291,7 +291,7 @@ List<Recruitment> seedRecruitments(DateTime now, List<AppUser> generalUsers) {
   ];
 }
 
-/// 釣果速報のシード。anchor（現在地）からの相対距離で配置する。
+/// 近況報告のシード。anchor（現在地）からの相対距離で配置する。
 /// id が 'cr-seed-' 始まりのものは GPS 更新のたびに再配置される
 /// （AppState.applyGps を参照）。
 class _CatchSeedSpec {
@@ -313,7 +313,7 @@ const List<_CatchSeedSpec> _catchSeedSpecs = [
   _CatchSeedSpec(
     'cr-seed-1',
     'u-jig-gen',
-    'sea',
+    'catch',
     'ブリ（75cm・ジギング）',
     '青海沖 合流点',
     '朝イチにヒットしました。これからナブラが出そうなので、'
@@ -325,11 +325,11 @@ const List<_CatchSeedSpec> _catchSeedSpecs = [
   _CatchSeedSpec(
     'cr-seed-2',
     'u-eging-mari',
-    'sea',
-    'アオリイカ（20〜25cm・エギング）',
+    'post',
+    '今週末はエギングに行く予定です',
     '青海堤防 第二折り',
-    '夜にアタリが多く5ハイ確保。エギはオレンジ系が効きました。'
-        '風が弱い日はさらに良さそうです。',
+    '夜にアタリが多いとの噂を聞いています。'
+        '一緒にのんびり釣りをする仲間も募集中です。',
     -0.2,
     0.8,
     Duration(hours: 5),
@@ -337,14 +337,26 @@ const List<_CatchSeedSpec> _catchSeedSpecs = [
   _CatchSeedSpec(
     'cr-seed-3',
     'u-wakasagi-nana',
-    'fresh',
-    'ニジマス（30cm級・ミャク釣り）',
-    '釣り堀 みずほ 管理釣り場',
-    '午前に3匹釣れました。深場のレンジが当たり。放流後が狙い目です。'
-        '初心者でもエサ付けから教えてもらえます。',
+    'art',
+    '釣り堀の看板のイラストを描いてみました',
+    '',
+    '釣行の記念に描いた水彩画です。'
+        '釣り仲間の交流に使ってくれたら嬉しいです。',
     -0.9,
     -0.3,
     Duration(hours: 26),
+  ),
+  _CatchSeedSpec(
+    'cr-seed-4',
+    'u-wakasagi-nana',
+    'event',
+    '管理釣り場の初心者講習に参加してきました',
+    '釣り堀 みずほ 管理釣り場',
+    'エサ付けから教えてもらえて勉強になりました。'
+        '次回の講習会も参加予定です。',
+    -0.7,
+    1.1,
+    Duration(hours: 9),
   ),
 ];
 

@@ -240,7 +240,7 @@ void main() {
     });
   });
   group('端末内スナップショット（モック永続化）', () {
-    test('募集・釣果・コミュニティは保存用Mapとの往復ができる', () {
+    test('募集・近況報告・コミュニティは保存用Mapとの往復ができる', () {
       final now = DateTime(2026, 3, 1, 12, 0);
       final rec = Recruitment(
         id: 'r-1',
@@ -263,7 +263,7 @@ void main() {
       final report = CatchReport(
         id: 'cr-1',
         reporterId: 'me',
-        kind: 'sea',
+        kind: 'catch',
         fishDescription: 'テスト魚（30cm・サビキ）',
         areaName: 'テスト堤防',
         detail: '状況メモ',
@@ -274,7 +274,7 @@ void main() {
       );
       final restoredReport = persist.catchReportFromMap(
           persist.catchReportToMap(report));
-      expect(restoredReport!.kind, 'sea');
+      expect(restoredReport!.kind, 'catch');
       expect(restoredReport.photoPath, report.photoPath);
       expect(restoredReport.createdAt, report.createdAt);
 
@@ -322,7 +322,7 @@ void main() {
       final othersReport = CatchReport(
         id: 'cr-other',
         reporterId: 'someone-else',
-        kind: 'sea',
+        kind: 'catch',
         fishDescription: '他人の投稿',
         areaName: 'どこか',
         detail: '',
@@ -333,7 +333,7 @@ void main() {
       final myReport = CatchReport(
         id: 'cr-mine',
         reporterId: 'me',
-        kind: 'sea',
+        kind: 'catch',
         fishDescription: '自分の投稿',
         areaName: 'どこか',
         detail: '',
@@ -751,13 +751,15 @@ void main() {
       }
     });
 
-    test('釣果速報: シードは近い順に並び、海・川湖両方を含む', () {
+    test('近況報告: シードは近い順に並び、釣果・つぶやき・イベント・絵を含む', () {
       final state = AppState();
       state.attachUser(_testUser(state), reseed: true);
       final reports = state.catchReports;
       expect(reports, isNotEmpty);
-      expect(reports.any((r) => r.isSea), isTrue);
-      expect(reports.any((r) => r.isFresh), isTrue);
+      expect(reports.any((r) => r.isCatch), isTrue);
+      expect(reports.any((r) => r.isPost), isTrue);
+      expect(reports.any((r) => r.isEvent), isTrue);
+      expect(reports.any((r) => r.isArt), isTrue);
       final me = state.me!;
       double km(CatchReport r) => haversineKm(me.lat, me.lng, r.lat, r.lng);
       for (var i = 1; i < reports.length; i++) {
@@ -770,17 +772,17 @@ void main() {
       }
     });
 
-    test('釣果速報: 登録して一覧に出し、掲載終了で消える', () async {
+    test('近況報告: 登録して一覧に出し、掲載終了で消える', () async {
       final state = AppState();
       state.attachUser(_testUser(state), reseed: true);
       final created = await state.registerCatchReport(
-        kind: 'sea',
+        kind: 'catch',
         fishDescription: 'テスト魚（30cm・サビキ）',
         areaName: 'テスト堤防',
         detail: '回遊あり',
         photoPath: '/data/catch_photos/catch_photo_1.jpg',
       );
-      expect(created.isSea, isTrue);
+      expect(created.isCatch, isTrue);
       expect(created.photoPath, '/data/catch_photos/catch_photo_1.jpg');
       expect(state.catchReports.any((r) => r.id == created.id), isTrue);
       await state.closeCatchReport(created.id);

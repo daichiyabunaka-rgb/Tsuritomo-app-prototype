@@ -6,8 +6,8 @@ import 'package:image_picker/image_picker.dart';
 import '../services/app_state.dart';
 import '../services/icon_service.dart';
 
-/// 釣果速報の登録シート（FR-7-1）。
-/// kind: 'sea'（海での釣果）/ 'fresh'（川・湖での釣果）
+/// 近況報告の登録シート（FR-7-1）。
+/// kind: 'catch'（釣果）/ 'post'（つぶやき）/ 'event'（イベント）/ 'art'（絵）
 Future<void> showCatchReportCreateSheet(BuildContext context) {
   return showModalBottomSheet<void>(
     context: context,
@@ -27,7 +27,7 @@ class _CreateSheetState extends State<_CreateSheet> {
   final _fishDescription = TextEditingController();
   final _areaName = TextEditingController();
   final _detail = TextEditingController();
-  String _kind = 'sea';
+  String _kind = 'catch';
   String? _photoPath; // 選択した投稿写真（null=未選択, ''=解除）
   bool _submitting = false;
 
@@ -63,7 +63,7 @@ class _CreateSheetState extends State<_CreateSheet> {
         setState(() => _submitting = false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('登録に失敗しました。通信状況を確認してください'),
+            content: Text('報告に失敗しました。通信状況を確認してください'),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -74,7 +74,7 @@ class _CreateSheetState extends State<_CreateSheet> {
     Navigator.of(context).pop();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('登録しました。近くのユーザーに表示されます'),
+        content: Text('報告しました。近くのユーザーに表示されます'),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -92,21 +92,31 @@ class _CreateSheetState extends State<_CreateSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('釣果を登録する',
+            Text('近況報告を投稿する',
                 style: theme.textTheme.titleLarge!
                     .copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             SegmentedButton<String>(
               segments: const [
                 ButtonSegment(
-                  value: 'sea',
-                  icon: Icon(Icons.waves),
-                  label: Text('海'),
+                  value: 'catch',
+                  icon: Icon(Icons.phishing),
+                  label: Text('釣果'),
                 ),
                 ButtonSegment(
-                  value: 'fresh',
-                  icon: Icon(Icons.pool),
-                  label: Text('川・湖'),
+                  value: 'post',
+                  icon: Icon(Icons.chat_bubble_outline),
+                  label: Text('つぶやき'),
+                ),
+                ButtonSegment(
+                  value: 'event',
+                  icon: Icon(Icons.celebration),
+                  label: Text('イベント'),
+                ),
+                ButtonSegment(
+                  value: 'art',
+                  icon: Icon(Icons.palette),
+                  label: Text('絵'),
                 ),
               ],
               selected: {_kind},
@@ -114,13 +124,19 @@ class _CreateSheetState extends State<_CreateSheet> {
             ),
             const SizedBox(height: 4),
             Text(
-              _kind == 'sea'
-                  ? '海での釣果を共有します。近くの釣り人の参考になる情報として表示されます。\n'
+              _kind == 'catch'
+                  ? '釣った魚・釣り場の状況の報告です。\n'
                       '※遊漁券・釣り禁止区域は現地の看板や漁業調整規則をご確認ください。'
                       '写真は釣果・風景の写るものを（本人の顔画像は不可）。'
-                  : '川・湖での釣果を共有します。\n'
-                      '※外来魚のリリース禁止など、水域ごとのルールをご確認ください。'
-                      '個人が特定できる情報は記入しないでください。',
+                  : _kind == 'post'
+                      ? '近況・ひとことのつぶやきです。\n'
+                          '※釣行の予定や装備の準備など、釣り仲間に伝えたい近況を報告しましょう。'
+                      : _kind == 'event'
+                          ? '釣りイベント・オフ会の報告です。\n'
+                              '※主催者・参加者のルールと許諾を守ってください。'
+                          : '描いた絵・イラストの投稿です。\n'
+                              '※他人の作品の無断転載・トレースは禁止です。'
+                              '成人向けの画像も投稿できません。',
               style: theme.textTheme.labelSmall!
                   .copyWith(color: Colors.grey.shade600),
             ),
@@ -128,17 +144,19 @@ class _CreateSheetState extends State<_CreateSheet> {
             TextField(
               controller: _fishDescription,
               maxLength: 40,
-              decoration: const InputDecoration(
-                labelText: '魚種・釣り方・サイズ',
-                hintText: '例: アジ（20〜25cm・サビキ）',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: _kind == 'art' ? 'タイトル（描いた絵の内容など）' : '魚種・釣り方・サイズ',
+                hintText: _kind == 'art'
+                    ? '例: 魚の水彩画を描いてみました'
+                    : '例: アジ（20〜25cm・サビキ）',
+                border: const OutlineInputBorder(),
                 counterText: '',
               ),
             ),
             const SizedBox(height: 12),
 
             // ------------------------------ 投稿写真（任意）
-            Text('写真（任意。釣果が伝わる写真を）',
+            Text('写真（任意。報告の画像を）',
                 style: theme.textTheme.titleSmall),
             const SizedBox(height: 8),
             Row(
@@ -179,10 +197,10 @@ class _CreateSheetState extends State<_CreateSheet> {
             TextField(
               controller: _areaName,
               maxLength: 30,
-              decoration: const InputDecoration(
-                labelText: '釣り場・ポイント',
+              decoration: InputDecoration(
+                labelText: _kind == 'art' ? '地域・釣り場名（絵は任意）' : '釣り場・ポイント',
                 hintText: '例: 青海堤防 第二折り',
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
                 counterText: '',
               ),
             ),
@@ -204,7 +222,7 @@ class _CreateSheetState extends State<_CreateSheet> {
                 onPressed: (_isValid && !_submitting) ? _submit : null,
                 child: const Padding(
                   padding: EdgeInsets.symmetric(vertical: 14),
-                  child: Text('登録する'),
+                  child: Text('報告する'),
                 ),
               ),
             ),
@@ -216,7 +234,7 @@ class _CreateSheetState extends State<_CreateSheet> {
 
   bool get _isValid =>
       _fishDescription.text.trim().isNotEmpty &&
-      _areaName.text.trim().isNotEmpty;
+      (_kind == 'art' || _areaName.text.trim().isNotEmpty);
 
   Widget _photoPreview(ThemeData theme) {
     final path = (_photoPath ?? '');

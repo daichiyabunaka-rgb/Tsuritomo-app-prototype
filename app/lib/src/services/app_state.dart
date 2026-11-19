@@ -273,7 +273,7 @@ class AppState extends ChangeNotifier {
 
   /// リリース（ベータ配布）ビルドではモックデータを出さない。
   /// モックの一般ユーザー・店舗・シード募集・シードコミュニティ・
-  /// シードの釣果速報は開発・テスト（デバッグ）ビルドのみ。
+  /// シードの近況報告は開発・テスト（デバッグ）ビルドのみ。
   bool get _useMockData => !kReleaseMode;
 
   void _rebuildMockUsers() {
@@ -379,7 +379,7 @@ class AppState extends ChangeNotifier {
   Timer? _persistDebounce;
   bool _persistBusy = false;
 
-  /// リリース（配布）ビルドのモックモードでは、自分の募集・釣果速報・
+  /// リリース（配布）ビルドのモックモードでは、自分の募集・近況報告・
   /// コミュニティ・部屋・メッセージを端末内に保存し、再起動後も残す。
   /// 開発・テストビルドではオフ（シード・テスト動作を壊さないため）。
   /// Supabase モードでは Postgres が永続化するため対象外。
@@ -585,7 +585,7 @@ class AppState extends ChangeNotifier {
           }
         }
       }
-      // 釣果速報
+      // 近況報告
       final reports = await supabaseData.fetchCatchReports(me!);
       _catchReports
         ..clear()
@@ -1369,7 +1369,7 @@ class AppState extends ChangeNotifier {
 
   final List<CatchReport> _catchReports = [];
 
-  /// 掲載終了とブロック済みユーザーの投稿を除いた釣果速報の一覧
+  /// 掲載終了とブロック済みユーザーの投稿を除いた近況報告の一覧
   /// （距離近い順）
   List<CatchReport> get catchReports {
     if (me == null) return const [];
@@ -1390,7 +1390,7 @@ class AppState extends ChangeNotifier {
     return km.isFinite ? distanceLabel(km) : '';
   }
 
-  /// 釣果速報（海 / 川・湖）を登録する
+  /// 近況報告（catch / post / event / art）を登録する
   Future<CatchReport> registerCatchReport({
     required String kind,
     required String fishDescription,
@@ -1454,7 +1454,7 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// モック: シードの釣果速報を現在地周囲に配置する
+  /// モック: シードの近況報告を現在地周囲に配置する
   void _seedMockCatchReports() {
     if (_catchReports.any((r) => r.id.startsWith('cr-seed-'))) return;
     _catchReports.addAll(buildSeedCatchReports(_now(), anchorLat, anchorLng));
